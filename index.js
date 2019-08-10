@@ -5,6 +5,7 @@ const fs = require('fs');
 const querystring = require('querystring');
 const zlib = require('zlib');
 const port = '8080';
+const db = require('./db');
 
 const requestHandler = (req, res) => {
 
@@ -53,6 +54,7 @@ const requestHandler = (req, res) => {
             res.end('Server Error');
             break;
         case `/files/${urlPath}`:
+            // TODO make variables split better
             let params = urlPath.split('/')[urlPath.split('/').length - 1].split('?');
             if (params.length > 1) {
                 urlPath = urlPath.split('?')[0];
@@ -63,14 +65,15 @@ const requestHandler = (req, res) => {
                 urlPath = 'index.html'
             }
             filePath = path.join(__dirname, dataPath, urlPath);
+            let fileName = filePath.split('/')[filePath.split('/').length - 1];
             readStream = fs.createReadStream(filePath);
 
             if (params.download) {
+                db.sendDataToModel(fileName);
                 if (params.filename) {
-                    res.setHeader("Content-Disposition", `attachment; filename=${params.filename}`);
-                } else {
-                    res.setHeader("Content-Disposition", "attachment");
+                    fileName = params.filename;
                 }
+                res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
                 if (params.compress) {
                     readStream.pipe(zlib.createGzip()).pipe(res);
                 }
@@ -87,6 +90,12 @@ const requestHandler = (req, res) => {
                     res.end(err);
                 });
             }
+            break;
+        case '/stats':
+            // TODO show data in browser
+            const data = JSON.parse(fs.readFileSync('app/data/datastore.json'));
+            console.log('DATASTORE', data);
+            res.end();
             break;
         default:
             res.statusCode = 404;
