@@ -59,32 +59,27 @@ const requestHandler = (req, res) => {
                 params = querystring.parse(params[1]);
             }
             const type = urlPath.match(/[^.]*$/)[0];
-
-            if (params.download && params.filename) {
-                res.setHeader("Content-Disposition", `attachment; filename=${params.filename}`);
-            } else if (params.download) {
-                res.setHeader("Content-Disposition", "attachment");
+            if (type === '') {
+                urlPath = 'index.html'
             }
+            filePath = path.join(__dirname, dataPath, urlPath);
+            readStream = fs.createReadStream(filePath);
 
-            if (type === 'txt' || type === 'html' || type === '') {
-                if (type === '') {
-                    urlPath = 'index.html'
+            if (params.download) {
+                if (params.filename) {
+                    res.setHeader("Content-Disposition", `attachment; filename=${params.filename}`);
+                } else {
+                    res.setHeader("Content-Disposition", "attachment");
                 }
-                filePath = path.join(__dirname, dataPath, urlPath);
-                fs.readFile(filePath, {encoding: 'utf-8'}, (err, data) => {
-                    if (!err) {
-                        res.end(data);
-                    } else {
-                        console.log('Error of reading file', err);
-                        res.end(err);
-                    }
-                });
-            } else if (type === 'mp3' || type === 'mp4' || type === 'jpg') {
+                if (params.compress) {
+                    readStream.pipe(zlib.createGzip()).pipe(res);
+                }
+            }
+            // TODO ask about error handling and about on open/error
+            if (!params.download || params.download && !params.compress) {
                 if (type === 'mp4') {
                     res.setHeader("Content-Type", "video/mp4");
                 }
-                filePath = path.join(__dirname, dataPath, urlPath);
-                readStream = fs.createReadStream(filePath);
                 readStream.on('open', () => {
                     readStream.pipe(res);
                 });
