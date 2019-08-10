@@ -2,15 +2,15 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
+const querystring = require('querystring');
+const zlib = require('zlib');
 const port = '8080';
 
 const requestHandler = (req, res) => {
 
-    res.setHeader("Content-Type", "text/html; charset=utf-8;");
-
-    let urlText = req.url.split('/')[2];
-    const dataPath = 'app/data/';
+    let urlPath = req.url.split('/').slice(2).join('/');
     let filePath, readStream;
+    const dataPath = 'app/data/';
 
     switch (req.url) {
         case '/ping':
@@ -21,10 +21,11 @@ const requestHandler = (req, res) => {
             res.end('Go sleep');
             break;
         case '/locale':
+            res.setHeader("Content-Type", "text/html; charset=utf-8;");
             res.end('Треба спать');
             break;
-        case `/echo-query/${urlText}`:
-            res.end(urlText);
+        case `/echo-query/${urlPath}`:
+            res.end(urlPath);
             break;
         case '/echo-query':
             if (req.method === 'POST') {
@@ -51,13 +52,25 @@ const requestHandler = (req, res) => {
             res.statusCode = 500;
             res.end('Server Error');
             break;
-        case `/files/${urlText}`:
-            const type = urlText.match(/[^.]*$/)[0];
+        case `/files/${urlPath}`:
+            let params = urlPath.split('/')[urlPath.split('/').length - 1].split('?');
+            if (params.length > 1) {
+                urlPath = urlPath.split('?')[0];
+                params = querystring.parse(params[1]);
+            }
+            const type = urlPath.match(/[^.]*$/)[0];
+
+            if (params.download && params.filename) {
+                res.setHeader("Content-Disposition", `attachment; filename=${params.filename}`);
+            } else if (params.download) {
+                res.setHeader("Content-Disposition", "attachment");
+            }
+
             if (type === 'txt' || type === 'html' || type === '') {
                 if (type === '') {
-                    urlText = 'index.html'
+                    urlPath = 'index.html'
                 }
-                filePath = path.join(__dirname, dataPath, urlText);
+                filePath = path.join(__dirname, dataPath, urlPath);
                 fs.readFile(filePath, {encoding: 'utf-8'}, (err, data) => {
                     if (!err) {
                         res.end(data);
@@ -66,13 +79,16 @@ const requestHandler = (req, res) => {
                         res.end(err);
                     }
                 });
-            } else if (type === 'mp3' || type === 'mp4') {
-                filePath = path.join(__dirname, dataPath, urlText);
+            } else if (type === 'mp3' || type === 'mp4' || type === 'jpg') {
+                if (type === 'mp4') {
+                    res.setHeader("Content-Type", "video/mp4");
+                }
+                filePath = path.join(__dirname, dataPath, urlPath);
                 readStream = fs.createReadStream(filePath);
-                readStream.on('open', function () {
+                readStream.on('open', () => {
                     readStream.pipe(res);
                 });
-                readStream.on('error', function(err) {
+                readStream.on('error', (err) => {
                     res.end(err);
                 });
             }
