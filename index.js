@@ -54,33 +54,33 @@ const requestHandler = (req, res) => {
             res.end('Server Error');
             break;
         case `/files/${urlPath}`:
-            // TODO make variables split better
             let params = urlPath.split('/')[urlPath.split('/').length - 1].split('?');
-            if (params.length > 1) {
-                urlPath = urlPath.split('?')[0];
-                params = querystring.parse(params[1]);
-            }
-            const type = urlPath.match(/[^.]*$/)[0];
-            if (type === '') {
+            let fileName = params[0];
+            const fileType = fileName.match(/[^.]*$/)[0];
+            if (fileType === '') {
                 urlPath = 'index.html'
             }
+            if (params.length > 1) {
+                urlPath = urlPath.replace(`?${params[1]}`, '');
+                params = querystring.parse(params[1]);
+            }
             filePath = path.join(__dirname, dataPath, urlPath);
-            let fileName = filePath.split('/')[filePath.split('/').length - 1];
             readStream = fs.createReadStream(filePath);
 
             if (params.download) {
-                db.sendDataToModel(fileName);
                 if (params.filename) {
-                    fileName = params.filename;
+                    res.setHeader("Content-Disposition", `attachment; filename=${params.filename}`);
+                } else {
+                    res.setHeader("Content-Disposition", `attachment;`);
                 }
-                res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
                 if (params.compress) {
                     readStream.pipe(zlib.createGzip()).pipe(res);
                 }
+                db.sendDataToModel(fileName);
             }
             // TODO ask about error handling and about on open/error
             if (!params.download || params.download && !params.compress) {
-                if (type === 'mp4') {
+                if (fileType === 'mp4') {
                     res.setHeader("Content-Type", "video/mp4");
                 }
                 readStream.on('open', () => {
@@ -92,10 +92,9 @@ const requestHandler = (req, res) => {
             }
             break;
         case '/stats':
-            // TODO show data in browser
-            const data = JSON.parse(fs.readFileSync('app/data/datastore.json'));
-            console.log('DATASTORE', data);
-            res.end();
+            const statsData = db.transformJSONDataToHTML();
+            res.setHeader("Content-Type", "text/html; charset=utf-8;");
+            res.end(statsData);
             break;
         default:
             res.statusCode = 404;
